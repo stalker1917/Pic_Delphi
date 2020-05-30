@@ -1,0 +1,25 @@
+/* 
+ * File:   main.c
+ * Author: PascalPicCreator v. Alpha
+ */
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <htc.h>
+#include "init.h"
+//---------------------------------------------------------------------
+// Configuration bits
+//---------------------------------------------------------------------
+#pragma config PWRT = OFF, LVP = OFF
+#pragma config FCMEN = ON
+#pragma config BOREN = ON, BORV = 2
+#pragma config WDT = OFF, MCLRE = ON
+#pragma config PBADEN = OFF, CCP2MX = PORTC
+#pragma config IESO = OFF, STVREN = ON
+#pragma config CP0 = ON
+#pragma config CP1 = ON
+#pragma config CP2 = ON
+#pragma config CP3 = ON
+#pragma config CPB = ON
+#pragma config CPD = OFF

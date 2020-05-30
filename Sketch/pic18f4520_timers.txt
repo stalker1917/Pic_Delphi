@@ -1,0 +1,26 @@
+
+void InitTimers(void)
+{
+    INTCONbits.GIEH = 1;
+//Init Timer0
+    T0CON = 0b01000000;
+    INTCONbits.TMR0IF = 0;
+    INTCONbits.TMR0IE = 1;
+//Init Timer1
+    T1CONbits.TMR1ON = 0;
+    T1CONbits.RD16 = 1;
+    PIR1bits.TMR1IF = 0;
+    PIE1bits.TMR1IE = 1;
+    IPR1bits.TMR1IP = 1;
+//Init Timer2
+    T2CONbits.TMR2ON = 0;
+    PIR1bits.TMR2IF = 0;
+    PIE1bits.TMR2IE = 1;
+    IPR1bits.TMR2IP = 1;
+//Init Timer3
+    T3CONbits.TMR3ON = 0;
+    T3CONbits.RD16 = 1;
+    PIR2bits.TMR3IF = 0;
+    PIE2bits.TMR3IE = 1;
+    IPR2bits.TMR3IP = 1;
+//User-mode Init

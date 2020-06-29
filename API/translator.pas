@@ -1,8 +1,7 @@
 ﻿unit Translator;
 interface
-uses  System.SysUtils;
+uses  System.SysUtils,Tokens,Common;
 type
- TText = Array of String; 
  TConstI = Record
      S : String;
      N : Integer;
@@ -11,32 +10,25 @@ type
      Sname,SValue : String;
    End;
 var    
- Code,Operators,ConstN : Ttext;
-function FindStrWithOperator(var Dump : TText; Number : Integer; FirstStr:Integer = 0) : Integer;
-function FindOperator(S:String; Number:Integer; pos:Integer) :Integer;
-Procedure FileToText(S:String;var Dump:TText); 
-Procedure CompileConst(var OutCode:TText); 
-Procedure CompileVar(var OutCode:TText); 
-Procedure CompileText(var OutCode:TText;FindStr:String); 
+ Code,ConstN : Ttext;
+ CommentN : Integer = -1;
+ Errors  : TText;
+ PasToken,CToken : TToken;
+ ProcTokens  : TText;
+function FindStrWithOperator(var Dump : TText; Number : TTokenKind; FirstStr:Integer = 0) : Integer;
+function FindOperator(S:String; Number:TTokenKind; pos:Integer=1) :Integer;
+function FindString(S:String; StrToFind:String;pos:Integer) :Integer;
+Procedure CompileConst(var OutCode:TText);
+Procedure CompileVar(var OutCode:TText);
+Procedure CompileText(var OutCode:TText;FindStr:String;CodePos:Integer=-1);
 Procedure AddTText(var T:TText; S:String);
+function Replace(const S:String;N:TTokenKind;RepStr:String):String;
+function ReplacePasToC(const S:String;N:TTokenKind):String;
+Function SplitStrByToken(var S1,S2:String; Token: TTokenKind):Boolean;
+function DeleteSpaceBars(S:String; Mode:Integer):String;// Удаляем проблемы
+
 implementation
-Procedure FileToText(S:String;var Dump:TText);
-var //s1:Ansistring;
-s1:String;
-f:Text;
-begin
-  Assignfile(f,s); //Список операторов
-  Reset(f);
-  SetLength(Dump,0);
-  while not eof(f) do
-    begin
-      readln(f,s1);
-      SetLength(Dump,Length(Dump)+1);
-      Dump[Length(Dump)-1] := s1;//UTF8ToWideString(s1);
-    end;
- //if Dump[0,1]=#$FEFF then Dump[0] := Copy(Dump[0],2,Length(Dump[0])-1);
- closeFile(f);
-end;
+
 
 function FindStrWithOperator;
 var i,a:Integer;
@@ -53,18 +45,47 @@ begin
     end;
 end;
 
-function FindOperator;
+function FindString;
 var i,High:Integer;
 begin
-  High := Length(s)-Length(Operators[Number])+1;
+  High := Length(s)-Length(StrToFind)+1;
   Result := -1;
   for I := pos to High do
-    if (s[i]=Operators[Number][1]) and (Copy(S,i,Length(Operators[Number]))=Operators[Number]) then
+    if (s[i]=StrToFind[1]) and (Copy(S,i,Length(StrToFind))=StrToFind) then
       begin
         Result := i;
         Break;
       end;
-  //if i>High then  Result := -1;
+end;
+
+
+function FindOperator;
+//var i,High:Integer;
+var StrToFind : String;
+flag:Boolean;
+begin
+  StrToFind := PasToken.GetToken(Number);
+  repeat
+  Result :=  FindString(S,StrToFind,pos);
+  if (CommentN>-1) and (Result>=CommentN) then Result := -1;
+  Flag := True;
+  if Result>-1 then
+    if (Number=ANDTOK) or (Number=XORTOK)  or (Number=ORTOK)  or (Number=NOTTOK)
+     then
+       begin
+         flag := False;
+         Pos := Result+1;
+         case S[Result-1] of
+          ' ': Flag := True;
+          ')': Flag := True;
+         end;
+       end;
+    if (Number=COLONTOK) and (S[Result+1]='=') then
+      begin
+        flag := False;
+        Pos := Result+1;
+      end;
+  until flag;
 end;
 
 function ToCycle(var S:String;N:Integer):Integer;
@@ -93,14 +114,14 @@ begin
    for I := N downto 1 do
      if (S[i]<>' ') and (S[i]<>#9) xor (result=1) then
       begin
-        result:=i+1;
+        result:=i; //Почему было i+1?
         break;
       end;
 end;
 
 
 function DeleteSpaceBars(S:String; Mode:Integer):String;// Удаляем проблемы
-var i,a,b:Integer;
+var a,b:Integer;
 begin
 
    case Mode of
@@ -119,6 +140,11 @@ begin
          b := DownToCycle(S,-1);
          a := DownToCycle(S,b);
         end;
+     else
+       begin
+         a := -1;
+         b := -1;
+       end;
    end;
 
  if (a<0) or (b<0) or (a>b) then result := ''
@@ -131,137 +157,403 @@ begin
   T[High(T)] := S;
 end;
 
-function Replace(const S:String;N:Integer;RepStr:String):String;
+
+
+
+
+
+function Replace(const S:String;N:TTokenKind;RepStr:String):String;
 var
-a,b : Integer;
+a,b,c : Integer;
 begin
-  a := FindOperator(S,N,1);
-  b := Length(Operators[N]);
-  if a>-1 then  result := Copy(S,1,a-1)+RepStr+Copy(S,a+b,Length(S)-a-b+1)
-  else result := S;
+  a:=0;
+  c:=1;
+  result := S;
+  while a>-1 do
+    begin
+      a := FindOperator(result,N,c);
+      b := Length(PasToken.GetToken(N));
+      if a>-1 then  result := Copy(result,1,a-1)+RepStr+Copy(result,a+b,Length(result)-a-b+1);
+      c:=a+2;
+      //else result := S;
+    end;
+end;
+
+function ReplacePasToC(const S:String;N:TTokenKind):String;
+begin
+  result := Replace(S,N,CToken.GetToken(N));
+end;
+
+function ReplaceStr(const S:String;FindStr:String;RepStr:String):String;
+begin
+  USERSTR1 := FindStr;  //Не потокобезопасно
+  Result   := Replace(S,USERTOK1,RepStr);
 end;
 
 procedure CodeToPort(NString,Pos:Integer;Var S:String);
 var b,c:Integer;
+S2:String;
 begin
   S := S+'PORT'+Code[NString][Pos+1]+'bits.'+Copy(Code[NString],Pos,2);
-  b := FindOperator(Code[NString],2,1);
+  b := FindOperator(Code[NString],PLUSTOK,1);
   if b=-1 then S:=S+'0'
-    else 
+    else
       begin
-        c := FindOperator(Code[NString],5,1); 
+        c := FindOperator(Code[NString],SEMICOLONTOK,1);
         S:= S + DeleteSpaceBars(Copy(Code[NString],b+1,c-b-1),1);
       end;
 end;
 
 //--------Main Code----
-Procedure CompileConst; 
+Procedure CompileConst;
 var a,b,c,i,j:Integer;
 S:String;
 begin
-  i:=FindStrWithOperator(Code,26)+1;
+  i:=FindStrWithOperator(Code,CONSTTOK)+1;
   if i=-1 then exit;   
   SetLength(ConstN,0);
   j:=0;
-  while FindOperator(Code[i],4,1) >-1 do
+  while FindOperator(Code[i],EQTOK,1) >-1 do
     begin
       inc(j);
-      a := FindOperator(Code[i],4,1); //
+      a := FindOperator(Code[i],EQTOK,1); //
       S:= Copy(Code[i],1,a-1);
-      AddTText(ConstN,DeleteSpaceBars(S,1));
-      //ConstN[j-1] := DeleteSpaceBars(S,1); //Запоминаем название константы. 
+      AddTText(ConstN,DeleteSpaceBars(S,1)); //Запоминаем название константы.
       S := '#define '+S+' ';
-      b := FindOperator(Code[i],27,a);
+      //USERSTR1 :='R';
+      b := FindString(Code[i],'R',a);
       if b>-1 then CodeToPort(i,b,S)
-      else 
-        S := S + IntToStr(StrToInt(Copy(Code[i],b+1,c-b-1)));
+      else
+        begin
+          b :=  FindOperator(Code[i],SEMICOLONTOK,1);
+          S :=  S + Copy(Code[i],a+1,b-a-1);
+          //S := S + IntToStr(StrToInt(Copy(Code[i],b+1,c-b-1)));
+        end;
       AddTText(OutCode,S);
-      inc(i);   
-    end;
-end;
-
-Procedure CompileVar(var OutCode:TText); 
-var a,b,c,i,j:Integer;
-S:String;
-begin
-  i:=FindStrWithOperator(Code,13)+1;  //var
-  if i=-1 then exit;   
-  while FindOperator(Code[i],22,1) >-1 do  //: 
-    begin
-      for j:= 14 to 19 do 
-        if  FindOperator(Code[i],j,1)>-1 then
-          begin
-              case j of 
-                 14:
-                   begin
-                     a := FindOperator(Code[i],28,1);
-                     if a=-1 then S := 'char[32] '  
-                     else 
-                       begin
-                         b := FindOperator(Code[i],29,a);
-                         S := 'char'+Copy(Code[i],a,b-a+1)+' ';
-                       end;
-                   end;
-                 15: S := 'unsigned char '; 
-                 16: S := 'int ';
-                 17: S := 'float ';
-                 18: S := 'unsigned int ';
-                 19: S := 'int ';
-              end;
-              a := FindOperator(Code[i],j,1);
-              S:=S+DeleteSpaceBars(Copy(Code[i],1,a),1)+';';
-              AddTText(OutCode,S);
-              break;
-          end;  
       inc(i);
     end;
 end;
 
+Procedure CompileVar(var OutCode:TText);
+var a,b,c,i:Integer;
+j : TTokenKind;
+S,S2,S3:String;
+begin
+  S2:='';
+  i:=FindStrWithOperator(Code,VARTOK)+1;  //var
+  if i=-1 then exit;   
+  while FindOperator(Code[i],COLONTOK,1) >-1 do  //:
+    begin
+      for j:= EMPTYTYPE to EXTENDEDTYPE do
+       begin
+        //USERSTR1 := GetTypeSpelling(i);  //Разобраться
+        if  FindOperator(Code[i],j,1)>-1 then
+          begin
+             S := Code[i];
+             SplitStrByToken(S,S3,EQTOK);
+              case j of
+                 STRINGTYPE: //STRINGTYPE
+                   begin
+                     S := 'char';
+                     a := FindOperator(Code[i],OBRACKETTOK,1);
+                     if a=-1 then S2:='[32]'
+                     else
+                       begin
+                         b := FindOperator(Code[i],CBRACKETTOK,a);
+                         S2 := Copy(Code[i],a,b-a+1);
+                       end;
+                     S3:=ReplacePasToC(S3,QUOTETOK);
+                   end;
+                 else
+                   begin
+                     S := CToken.GetToken(j);
+                     S3:=ReplacePasToC(S3,DOLLARTOK);
+                   end;
+              end;
+              if S3='' then  S3:=';';
+              a := FindOperator(Code[i],j,1);
+              S:=S+' '+DeleteSpaceBars(Copy(Code[i],1,a),1)+S2+S3;//+';';
+              AddTText(OutCode,S);
+              break;
+          end;
+       end;
+      inc(i);
+    end;
+end;
+
+procedure DecodeParams(const S_in:String;var S_out :TText);
+var a,b,c : Integer;
+begin
+  SetLength(S_out,0);
+  a := FindOperator(S_in,OPARTOK,1);
+  if a<0 then exit;
+  b := FindOperator(S_in,CPARTOK,a);
+  if (b<0) or (b=a+1) then exit;   //fun()
+  repeat
+    c := FindOperator(S_in,COMMATOK,a+1);
+    if c<0 then c:=b;
+    AddTText(S_out,Copy(S_in,a+1,c-a-1));
+    a := c;
+  until (c>=b);
+end;
+//Вычленяем параметры функции
+
+Function CheckLength(A:TText;N:Integer;S:String):Boolean;
+begin
+  result := Length(A)<>N;
+  if result then AddTText(Errors,'Ошибка! Встроенная функция'+ S+'требует '+IntToStr(N)+' параметров');
+
+end;
+
+function LengthTok(A:TTokenKind):Byte;
+begin
+  result :=  Length(PasToken.GetToken(A));
+end;
+
+
+
+
+// if i=1 then j:=2
+// i=1
+// j:=2
+procedure DecodeTok(const Arr:TArray<TTokenKind>;const S_in:String; var  S_out :TText);
+var i,a,b:Integer;
+begin
+  SetLength(S_out,Length(Arr));
+  a := FindOperator(S_in,Arr[0],1);
+  if a<0 then exit;
+  i:=0;
+  while i<High(Arr) do
+    begin
+      a := a+LengthTok(Arr[i]);
+      b := FindOperator(S_in,Arr[i+1],a+1);
+      S_out[i] := Copy(S_in,a,b-a);
+      a := b;
+      inc(i);
+    end;
+  a := a+LengthTok(Arr[i]);
+  S_out[High(Arr)] := Copy(S_in,a,High(S_in)-a+1);
+end;
+
+Function SplitStrByToken(var S1,S2:String; Token: TTokenKind):Boolean;
+var Position:Integer;
+begin
+ Result:=True;
+ Position := FindOperator(S1,Token,1);
+  if Position>-1 then
+    begin
+      S2:=Copy(S1,Position,Length(S1)-Position+1);
+      if Position=1 then Result:=False
+                    else S1:=Copy(S1,1,Position-1);
+    end;
+end;
+
+Procedure ReplaceAll(var S:String;Logical:Boolean=False);
+var //Comment : Integer;
+S2:String;
+begin
+  S2:='';
+  if (not SplitStrByToken(S,S2,COMMENTTOK)) then exit;
+  if Logical then
+    begin
+      S := Replace(S,EQTOK,'==');
+      S := Replace(S,ORTOK,'||');
+      S := Replace(S,ANDTOK,'&&');
+    end
+  else
+    begin
+      S := Replace(S,ASSIGNTOK,'=');  //Переписать в полную замену.
+      S := Replace(S,XORTOK,'^');
+      S := Replace(S,ORTOK,'|');
+      S := Replace(S,ANDTOK,'&');
+    end;
+  S := ReplacePasToC(S,DOLLARTOK);
+  S := Replace(S,NETOK,'!=')+S2;
+
+end;
+
+Procedure SetState(i:Integer; Tok:TTokenKind;Var State :TTokenKind );
+var b:Integer;
+begin
+   b := FindOperator(Code[i],Tok,1);    //SetBit
+   if b>-1 then State := Tok;
+end;
+
+Function SetTabs(N:Integer):String;
+var j:Integer;
+begin
+   Result := '';
+   for j := 1 to N do Result:=Result+'  ';
+end;
+
 procedure CompileText;
 var a,b,c,i,j:Integer;
-State:Integer;
-S:String;
+Tok:TTokenKind;
+TokArr : TArray<TTokenKind>;
+State:TTokenKind;
+Begins:Integer;
+S,S2:String;
+Params : TText;
+FirstCase : Boolean;
+CaseHeap : TArray<Word>;
 begin
-  a := FindStrWithOperator(Code,34); 
-  if a=-1 then exit;
-  Operators[High(Operators)] := FindStr;
-  a := FindStrWithOperator(Code,High(Operators),a);
-  if a=-1 then exit;
-  i:=a;
-  repeat 
-    inc(i)
-  until FindOperator(Code[i],11,1)>-1;
-  inc(i);
-  repeat 
-    State:=0;
-    b := FindOperator(Code[i],33,1);
-    if b>-1 then State:=1;
-    Case State of
-      0:
-        begin       
-         S := Replace(Code[i],0,'=');
-         S := Replace(S,32,'^');
+  if CodePos=-1 then
+    begin
+      Begins:=0;
+      FirstCase := True;
+      CaseHeap := TArray<Word>.Create();
+      a := FindStrWithOperator(Code,IMPLEMENTATIONTOK);
+      if a=-1 then
+        begin
+          AddTText(Errors,'Ошибка! Нет секции implementation!');
+          exit;
         end;
-      1:
-      begin
-        b := FindOperator(Code[i],23,1);      //(
-        c := FindOperator(Code[i],6,1);      //,
-        //S:= Copy(Code[i],b+1,c-b);
-        S:='';
-        if Code[i][b+1]='R' then CodeToPort(i,b+1,S)
-                            else S:= Copy(Code[i],b+1,c-b-1);  
-        S := '  '+S+' = ';   
-        b := FindOperator(Code[i],24,1); 
-        S:= S+Copy(Code[i],c+1,b-c-1)+';';
-       // inc(i);
-        //continue;
-        //for j:=0 to High(ConstN)
-          //if ConstN[i]=
-      end
+        //Operators[High(Operators)] := FindStr;
+      USERSTR1 := FindStr;
+      a := FindStrWithOperator(Code,USERTOK1,a);
+    end
+  else a := CodePos;
+  if a=-1 then
+    begin
+      AddTText(Errors,'Ошибка! Отсутствует функция '+FindStr);
+      exit;
     end;
+  i:=a;
+  repeat
+    inc(i)
+  until FindOperator(Code[i],BEGINTOK,1)>-1;
+  inc(i);
+  repeat
+    CommentN := -1;
+    CommentN := FindOperator(Code[i],COMMENTTOK,1);
+   // if CommentN>-1 then
+    //  j:=1;
+    State:=EMPTYTOK;
+    for Tok := SETBITTOK to DECTOK do  SetState(i,Tok,State);
+    SetState(i,COLONTOK,State);
+    SetState(i,BEGINTOK,State);
+    SetState(i,IFTOK,State);
+    SetState(i,CASETOK,State);
+    SetState(i,ENDTOK,State);
+    SetState(i,FORTOK,State);
+    DecodeParams(Code[i],Params);
+    Case State of
+      SETBITTOK:
+      begin
+        if CheckLength(Params,2,'SetBit') then exit;
+        S:='';
+        if Params[0][1]='R' then CodeToPort(i,b+1,S)
+                            else S:= Params[0];
+        S := SetTabs(begins+1)+S+' = ';
+        S:= S+Params[1]+';';
+      end;
+     FASTTXTOK:
+       begin
+         if CheckLength(Params,2,'FASTTX') then exit;
+          case CPU of
+            PIC18F4520:
+              begin
+                AddTText(OutCode,'while (!TXSTAbits.TRMT);');
+                S:=SetTabs(begins+1)+'TXREG = '+Params[1]+';';
+              end;
+          end;
+
+       end;
+     FASTRXTOK:
+       begin
+         if CheckLength(Params,2,'FASTRX') then exit;
+         S := SetTabs(begins+1)+Params[1]+' = RX_'+Params[0]+';';
+       end;
+     INCTOK:
+       begin
+         if CheckLength(Params,1,'inc') then exit;
+         S := SetTabs(begins+1)+Params[0]+'++;';
+       end;
+     DECTOK:
+       begin
+         if CheckLength(Params,1,'dext') then exit;
+         S := SetTabs(begins+1)+Params[0]+'--;';
+       end;
+     IFTOK:
+       begin
+         TokArr:= TArray<TTokenKind>.Create(IFTOK,THENTOK);
+         DecodeTok(TokArr,Code[i],Params);
+         ReplaceAll(Params[0],True);
+         ReplaceAll(Params[1]);
+         S := SetTabs(begins+1)+'if ('+Params[0]+') '+Params[1];
+         //TokArr.Free;
+       end;
+     CASETOK:
+       begin
+         TokArr:= TArray<TTokenKind>.Create(CASETOK,OFTOK);
+         DecodeTok(TokArr,Code[i],Params);
+         ReplaceAll(Params[0],True);
+         S := SetTabs(begins+1)+'switch ('+Params[0]+') {';
+         FirstCase := True;
+         TArrHack<Word>.Append(CaseHeap,Begins);
+         //<Word>
+       end;
+     FORTOK:
+       begin
+         TokArr:= TArray<TTokenKind>.Create(FORTOK,ASSIGNTOK,TOTOK,DOTOK);
+         DecodeTok(TokArr,Code[i],Params);
+         ReplaceAll(Params[3],false);
+         Params[0] := DeleteSpaceBars(Params[0],0);
+         S := SetTabs(begins+1)+'for ('+Params[0]+' ='+Params[1]+';'+Params[0]+' <='+Params[2]+';'+Params[0]+'++)'+Params[3];
+       end;
+     BEGINTOK:
+       begin
+         inc(begins);
+         S:=SetTabs(begins);
+         //for j := 1 to begins*2 do S:=S+' ';
+         S := S+CToken.GetToken(BEGINTOK);
+       end;
+     ENDTOK:
+       begin
+         S:=SetTabs(begins);
+         //for j := 1 to begins*2 do S:=S+' ';
+         S := S+CToken.GetToken(ENDTOK);
+         if (Length(CaseHeap)>0) and (TArrHack<Word>.GetHigh(CaseHeap)>=Begins) then
+          begin
+            TArrHack<Word>.DeleteHigh(CaseHeap);
+            FirstCase := (length(CaseHeap)=0);
+          end
+         else dec(begins);
+       end;
+     COLONTOK: if (length(CaseHeap)>0) then  //Если не было case то так не транслируем.
+       begin
+         if Firstcase then FirstCase:=False
+                      else AddTText(OutCode,SetTabs(begins+1)+'break;');
+         S := Code[i];
+         SplitStrByToken(S,S2,COLONTOK);
+         S := DeleteSpaceBars(S,2);
+         ReplaceAll(S2);
+         S:= SetTabs(begins+1)+' case '+S+S2;
+       end
+       else
+      else
+        begin
+          S:=Code[i];
+          ReplaceAll(S);
+        end;
+    end;
+    for j := 0 to High(ProcTokens) do
+      begin
+        a := FindString(S,ProcTokens[j],1);
+        if a>-1 then
+          begin
+            if S[a+Length(ProcTokens[j])]<>'(' then
+              begin
+                S:=ReplaceStr(S,ProcTokens[j],ProcTokens[j]+'()');
+                AddTText(Errors,'Предупреждение! Надо вызывать процедуру как '+ProcTokens[j]+'(), а не '+ProcTokens[j]);
+              end;
+            break;
+          end;
+      end;
     AddTText(OutCode,S);
     inc(i)
-  until FindOperator(Code[i],12,1)>-1;
+  until (FindOperator(Code[i],ENDTOK,1)>-1) and (Begins=0);  //Последняя end не обрабатывается
+  CommentN := -1;
 end;
 
 begin

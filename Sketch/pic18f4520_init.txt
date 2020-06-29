@@ -12,15 +12,8 @@
 void Init(void);
 void InitCPU(void);
 void InitTimers(void);
-void InitUART(void);
+void InitUART(char NPort,long int BaudRate);
 
-
-void Init(void)
-{
-InitCPU();
-InitTimers();
-InitUART();
-}
 
 void InitCPU(void)
 {

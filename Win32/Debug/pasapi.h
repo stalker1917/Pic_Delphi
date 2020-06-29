@@ -1,0 +1,2 @@
+void TransferStr(char* Str);
+ 

@@ -1,0 +1,16 @@
+no type
+any type
+int
+short
+shortint
+unsigned short
+unsigned char
+char
+char
+double
+float
+char
+ñhar[32]
+float
+long double
+array

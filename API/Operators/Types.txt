@@ -1,0 +1,16 @@
+no type
+any type
+integer
+smallint
+shortint
+word
+byte
+character
+boolean
+double
+single
+string
+Ansistring
+real
+extended
+array

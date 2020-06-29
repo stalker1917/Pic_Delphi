@@ -4,7 +4,9 @@ uses
   Vcl.Forms,
   piclibrary in 'API\piclibrary.pas' {Form1},
   translator in 'API\translator.pas',
-  usercode in 'usercode.pas';
+  usercode in 'usercode.pas',
+  common in 'API\common.pas',
+  tokens in 'API\tokens.pas';
 
 {$R *.res}
 
@@ -23,8 +25,9 @@ begin
   SetAsIn(RA+5);
   //SetTimer(1,9,nil);
   InitCPU;
-  SetTimer(1,5000000,OnTimer1);
+  SetTimer(1,1000,OnTimer1);
   SetTimer(2,3000*Millisecond,OnTimer2);
+  SetUART(0,115200,OnRxChar0,nil);
   InitProc := Start; //Процедура , которая выполниться при старте.
   //Конец пользовательского когда.
   Application.Run;

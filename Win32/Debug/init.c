@@ -12,15 +12,8 @@
 void Init(void);
 void InitCPU(void);
 void InitTimers(void);
-void InitUART(void);
+void InitUART(char NPort,long int BaudRate);
 
-
-void Init(void)
-{
-InitCPU();
-InitTimers();
-InitUART();
-}
 
 void InitCPU(void)
 {
@@ -85,7 +78,35 @@ TMR2 = 0;
 T2CONbits.TMR2ON = 1;
 
 }
-void InitUART(void)
+#define Clock 32000000
 
+void InitUART(char NPort,long int BaudRate)
 {
+     
+    TXSTAbits.TXEN = 0; // Transmitter off
+    RCSTAbits.CREN = 0; // Receiver off
+    TRISCbits.RC6 = 1;   //Need for working of USART
+    TRISCbits.RC7 = 1;   //Need for working of USART
+      // Настройка USART
+    TXSTA = 0x24;       /* 8-битная передача
+                           Асинхронный режим
+                           Передатчик выключен
+                           Высокоскоростной режим включен   */
+    RCSTA = 0x80;       /* Сконфигурировать порты как Serial port
+                           8-битный прием
+                           Приемник отключен */
+    BAUDCON = 0x08;     // 16-bit counter
+    if (Clock%(4*BaudRate)<2*BaudRate) BaudRate = Clock/(4*BaudRate)-1; 
+    else BaudRate = Clock/(4*BaudRate);
+    SPBRGH = BaudRate >> 8;         // 56000
+    SPBRG = BaudRate%256;//30//256000  //68 -115200;//SPBRG = 142;
+    TXSTAbits.TXEN = 1; // Transmitter on
+    RCSTAbits.CREN = 1; // Receiver on
+}
+
+void Init(void)
+{
+  InitCPU();
+  InitTimers();
+  InitUART(0,115200);
 }

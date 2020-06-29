@@ -1,0 +1,4 @@
+Start
+MainLoop
+OnTimer
+OnRxChar

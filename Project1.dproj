@@ -101,6 +101,8 @@
         </DCCReference>
         <DCCReference Include="API\translator.pas"/>
         <DCCReference Include="usercode.pas"/>
+        <DCCReference Include="API\common.pas"/>
+        <DCCReference Include="API\tokens.pas"/>
         <BuildConfiguration Include="Release">
             <Key>Cfg_2</Key>
             <CfgParent>Base</CfgParent>

@@ -573,7 +573,7 @@ begin
      //--------Сompile other procedures
     CompileOtherProc(False);
     For i:=0 to High(MainCode) do Writeln(FMain,MainCode[i]);
-    For i:=0 to High(Errors) do Form1.Memo1.Lines.Add(Errors[i]); //Вывести ошибки
+    For i:=0 to High(Errors) do WriteMemo(Errors[i]); //Вывести ошибки
     Flush(FMain);
   end;
 

@@ -116,12 +116,16 @@ TTokenKind =
     STRINGTYPE,
     ANSISTRINGTYPE,
     REALTYPE,
+    LONGINTTYPE,
     EXTENDEDTYPE,
+    RECTYPE,
     ARRAYTYPE,
     //Inline_Functions
     SETBITTOK,
+    GETBITTOK,
     FASTTXTOK,
     FASTRXTOK,
+    NOPTOK,
     INCTOK,
     DECTOK,
     //Usercode_Procedure
@@ -168,7 +172,7 @@ begin
   case TokKind of
     EMPTYTOK..DEREFERENCETOK:   Result := Delimiters[Ord(TokKind) - Ord(EMPTYTOK){ + 1}];
     ANDTOK..XORTOK:             Result := KeyWords[Ord(TokKind) - Ord(ANDTOK){ + 1}];
-    EMPTYTYPE..EXTENDEDTYPE:    Result := Types[Ord(TokKind) - Ord(EMPTYTYPE)];
+    EMPTYTYPE..ARRAYTYPE:       Result := Types[Ord(TokKind) - Ord(EMPTYTYPE)];
     SETBITTOK..DECTOK:          Result := InlineT[Ord(TokKind) - Ord(SETBITTOK)];
     STARTTOK..ONRXCHARTOK:      Result := UserCodeT[Ord(TokKind) - Ord(STARTTOK)];
     USERTOK1:                   Result := USERSTR1;

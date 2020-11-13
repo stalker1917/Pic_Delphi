@@ -1,0 +1,21 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <htc.h>
+ñhar MainPort;
+void TransferStr(char* Str);
+void TransferStr(char* Str)   
+{
+  volatile unsigned int j;
+  j=0;
+  while(Str[j]!=0)    
+  {     
+      TXREG = Str[j];
+      j++;
+      while (!TXSTAbits.TRMT);   
+  } 
+}
+
+void ChangePort(char P)
+{
+MainPort = P;
+}

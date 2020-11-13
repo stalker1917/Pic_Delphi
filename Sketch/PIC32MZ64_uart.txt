@@ -1,0 +1,52 @@
+
+void InitUART(char NPort,long int BaudRate)
+{
+   __U1STAbits_t * STABits;
+   __U1MODEbits_t * MODEBits;
+   unsigned int * UxBRG;
+   switch (NPort)
+   {
+       case 0:
+           STABits = &U1STAbits;
+           MODEBits = &U1MODEbits;
+           UxBRG = &U1BRG;
+           break;
+       case 1:
+           STABits = &U2STAbits;
+           MODEBits = &U2MODEbits;
+           UxBRG = &U2BRG;
+           break; 
+       case 2:
+           STABits = &U3STAbits;
+           MODEBits = &U3MODEbits;
+           UxBRG = &U3BRG;
+           break;
+       case 3:
+           STABits = &U4STAbits;
+           MODEBits = &U4MODEbits;
+           UxBRG = &U4BRG;
+           break;
+       case 4:
+           STABits = &U5STAbits; 
+           MODEBits = &U5MODEbits;
+           UxBRG = &U5BRG;
+           break;
+       case 5:
+           STABits = &U6STAbits;
+           MODEBits = &U6MODEbits;
+           UxBRG = &U6BRG;
+           break;    
+   }
+   MODEBits->ON = 0; 
+   STABits->URXEN = 0;
+   STABits->UTXEN = 0;
+   *UxBRG= ((Clock / BaudRate) / 8) - 1; 
+   MODEBits->PDSEL = 0;
+   MODEBits->STSEL = 0;
+   MODEBits->BRGH = 1;
+   MODEBits->UEN = 0;
+   STABits->URXEN = 1;
+   STABits->UTXEN = 1;
+   MODEBits->ON = 1;
+
+}

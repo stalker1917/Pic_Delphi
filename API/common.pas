@@ -5,6 +5,10 @@ uses System.SysUtils;
 
 const
     PIC18F4520 = 0;
+    PIC32MZ64 = 1;
+    PIC32MZ144 = 2;
+    High_CPU = 2;
+    CPU_Name : Array[0..High_CPU] of String = ('PIC18F4520','PIC32MZ64','PIC32MZ144');
 type
 TText   = Array of String;
 TArrHack<T> = class

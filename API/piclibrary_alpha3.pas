@@ -64,7 +64,6 @@ const
   InitTail = '_init.txt';
   TimersTail='_timers.txt';
   UartTail='_uart.txt';
-  ApiTail='_api.txt';
 var
   Form1: TForm1;
   Quartz      : Integer; //Mhz
@@ -88,7 +87,6 @@ var
   Ports       :  Array[0..6] of ^LongWord;
   PortA,PortB,PortC,PortD,PortE,PortF:LongWord; // Для работы с 32bit;
   OnPort      : TInterrupt = nil;
-  MainPort    : Byte = 0;
 procedure PrepareToMain;
 procedure Run; //Применить установленную конфигурацию.
 procedure InitCPU; //Инициализация CPU
@@ -102,7 +100,6 @@ procedure FastTx(USART:Byte;Data:AnsiChar); overload;
 procedure FastTx(USART:Byte;Data:Byte); overload;
 procedure SetCompile;
 procedure TransferStr(S:AnsiString);
-procedure ChangePort(N:Byte);
 procedure InitUART(Port:Byte;BaudRate:Integer);
 procedure Nop;
 procedure GetBit(Port:Byte;var Bit:Byte;InvertTRISA:Boolean=False);
@@ -172,7 +169,6 @@ end;
               WriteLn(FInit,S);
             end;
           Close(FSketch);
-          CopyFile(PWideChar(PathSketch+CPU_Name[CPU]+APITail),'pasapi.c',false);
         end;
    case Cpu of
       PIC18F4520:
@@ -368,18 +364,17 @@ begin
             WriteMemo('SPBRH= '+InttoStr(SPBRH));
             WriteMemo('Установлена скорость '+IntToStr(Division(SPBRG+SPBRH*256+1)));
           end;
-       PIC32MZ64..PIC32MZ144:
-         begin
-           Scale := 8;
-           SPBRG := Division(BaudRate)-1;
-           WriteMemo('UxBRG = '+InttoStr(SPBRG));
-           WriteMemo('Установлена скорость '+IntToStr(Division(SPBRG+1)));
-         end;
       end;
 
     end;
 end;
 
+{
+function BitToByte(B:Byte):Byte;
+begin
+  result shl(
+end;
+}
 
 procedure SetAsIn(Port:Byte);
 var c:Char; i:Integer;
@@ -633,8 +628,6 @@ begin
 end;
 
 procedure RunUART(i:Integer);
-var
-S,S2:String;
 begin
   case Cpu of
     PIC18F4520:
@@ -648,24 +641,6 @@ begin
         AddTText(MainCode,'{');
         AddTText(MainCode,'RX_'+IntToStr(i)+' = RCREG;');
         //Обработка ошибкb
-        AddTText(MainCode,'//User code');
-      end;
-    PIC32MZ64..PIC32MZ144:
-      begin
-        S:='U'+IntToStr(i+1);
-        AddTText(MainCode,'if (('+S+'STAbits.OERR)||('+S+'STAbits.FERR)) {');
-        AddTText(MainCode,'  '+S+'STAbits.URXEN = 0;');
-        AddTText(MainCode,'  '+S+'STAbits.URXEN = 1;');
-        AddTText(MainCode,'}');
-        case i of
-          0:    S2:= 'IFS3bits.';
-          1,2:  S2:= 'IFS4bits.';
-          3..5: S2:= 'IFS5bits.';
-        end;
-        AddTText(MainCode,'if ('+S2+S+'RXIF)'+' while ('+S+'STAbits.URXDA)');
-        AddTText(MainCode,'{');
-        AddTText(MainCode,'RX_'+IntToStr(i)+' = '+S+'RXREG;');
-        //Обработка ошибок
         AddTText(MainCode,'//User code');
       end;
   end;
@@ -886,12 +861,7 @@ begin
   n := Length(S);
   SetLength(A,n);
   for I := 0 to n-1 do  A[i]:=Byte(S[i+1]);
-  if @UARTS[MainPort].OnPCRxChar<>nil then UARTS[MainPort].OnPCRxChar(A,n);
-end;
-
-Procedure ChangePort;
-begin
-  MainPort := N;
+  if @UARTS[0].OnPCRxChar<>nil then UARTS[0].OnPCRxChar(A,n);
 end;
 
 procedure InitUART(Port:Byte;BaudRate:Integer);

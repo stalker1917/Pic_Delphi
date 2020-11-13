@@ -13,4 +13,6 @@ char
 ñhar[32]
 float
 long double
+long
+struct
 array

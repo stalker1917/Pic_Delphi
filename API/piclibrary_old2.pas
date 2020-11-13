@@ -1,12 +1,10 @@
-
-
 unit piclibrary;
 
 interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs,translator,Common,Tokens, Vcl.StdCtrls,Math;
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs,translator, Vcl.StdCtrls;
 
 type
   TForm1 = class(TForm)
@@ -37,7 +35,7 @@ end;
 TTimer = record
    Counter : Int64;
    Delay   : Int64;
-   Prescale : Word;
+   Prescale : Byte;
    ProgramScale : Integer;
    Tail : Integer;
    PrescaleCode : Byte;
@@ -47,6 +45,7 @@ end;
 
 
 const
+  PIC18F4520 = 0;
  // PIC18F4520_Clock = 40;
   RA = 0;
   RB = 10;
@@ -56,22 +55,14 @@ const
   RF = 50;
   INTERAL = 10000; //INTIO2;
   Millisecond = 1000;
-  Second = 1000*Millisecond;
-  ReportRWPort = False; // Сообщение о том, сколько было ли чтение или запись в порт
-  PathOperators = '../../../';
-  PathSketch = '../../../Sketch/';
-  MainTail = '_main.txt';
-  InitTail = '_init.txt';
-  TimersTail='_timers.txt';
-  UartTail='_uart.txt';
-  ApiTail='_api.txt';
+
 var
   Form1: TForm1;
+  Cpu         : Integer;
   Quartz      : Integer; //Mhz
   Clock       : Integer;
   YesCompile  : Boolean = False;
   RealTime    : Boolean = True;
-  EC          : Boolean = False; //EC or HC Clock;
   FMain       : Text;
   FInit       : Text;
   FSketch     : Text;
@@ -83,12 +74,7 @@ var
   Timers      :  Array of TTimer;
   InitProc    :  procedure;
   PICControllers : TPICCOntroller = (Clock : 40; Timers:4; Uarts:1);
-  PIC32MZSetup   : TPICCOntroller = (Clock : 200; Timers:9; Uarts:6);
   YesRun      : Boolean=False;
-  Ports       :  Array[0..6] of ^LongWord;
-  PortA,PortB,PortC,PortD,PortE,PortF:LongWord; // Для работы с 32bit;
-  OnPort      : TInterrupt = nil;
-  MainPort    : Byte = 0;
 procedure PrepareToMain;
 procedure Run; //Применить установленную конфигурацию.
 procedure InitCPU; //Инициализация CPU
@@ -97,16 +83,8 @@ procedure SetTimer(N:Byte;Delayus:Int64;Interrupt:TInterrupt);//Инициализация US
 procedure SetUart(N:Byte; BaudRate:LongInt; Interrupt:TInterrupt; PcProc : TCallBackProc);
 procedure SetAsIn(Port:Byte);
 procedure SetBit(Port,Bit:Byte);
-procedure FastRx(USART:Byte;var Data:Byte);
-procedure FastTx(USART:Byte;Data:AnsiChar); overload;
-procedure FastTx(USART:Byte;Data:Byte); overload;
 procedure SetCompile;
-procedure TransferStr(S:AnsiString);
-procedure ChangePort(N:Byte);
-procedure InitUART(Port:Byte;BaudRate:Integer);
-procedure Nop;
-procedure GetBit(Port:Byte;var Bit:Byte;InvertTRISA:Boolean=False);
-procedure SetCPU(In_CPU:word);
+
 
 implementation
 
@@ -121,23 +99,7 @@ end;
 procedure InitCPU;
 var S:String;
 C:Char;
-i,j,Indiv:Integer;
-CPU_Div:Integer;
-Procedure CalcCpu_div;
-var i:Integer;
-begin
-CPU_Div := Round(200/PIC32MZSetup.Clock);
-if CPU_Div<1  then CPU_Div := 1;
-if CPU_Div>16 then CPU_Div := 16;
-j := 1;
-  for I := 1 to 5 do
-    begin
-      if abs(CPU_Div-j)<abs(CPU_Div-2*j) then break;
-      j:=j*2;
-    end;
-CPU_Div := j*2;
-end;
-
+i:Integer;
   begin
     if initCPUF then
       begin
@@ -152,11 +114,12 @@ end;
          Assign(FInit,'init.c');
          Rewrite(FInit);
        end;
-   // case Cpu of
-      //PIC18F4520:
-      if YesCompile then
+    case Cpu of
+      PIC18F4520:
         begin
-          Assign(FSketch,PathSketch+CPU_Name[CPU]+MainTail);
+           if YesCompile then
+             begin
+          Assign(FSketch,'../../Sketch/PIC18F4520_main.txt');
           Reset(FSketch);
           while (not Eof(FSketch)) do
             begin
@@ -164,7 +127,7 @@ end;
               WriteLn(FMain,S);
             end;
           close(FSketch);
-          Assign(FSketch,PathSketch+CPU_Name[CPU]+InitTail);
+          Assign(FSketch,'../../Sketch/PIC18F4520_init.txt');
           Reset(FSketch);
           while (not Eof(FSketch)) do
             begin
@@ -172,11 +135,8 @@ end;
               WriteLn(FInit,S);
             end;
           Close(FSketch);
-          CopyFile(PWideChar(PathSketch+CPU_Name[CPU]+APITail),'pasapi.c',false);
-        end;
-   case Cpu of
-      PIC18F4520:
-        begin
+          end;
+
          // Clock :=  PICControllers.Clock;//PIC18F4520_Clock;
           if Quartz>PICControllers.Clock then
             begin
@@ -213,50 +173,6 @@ end;
             end;
            end;
         end;
-      PIC32MZ64..PIC32MZ144:
-        begin
-          if Quartz>PIC32MZSetup.Clock then
-            begin
-              WriteMemo('Используем внутренний осцилятор.');
-              if YesCompile then
-                begin
-                WriteLn(FMain,'#pragma config FPLLICLK =   PLL_FRC ');
-                WriteLn(FMain,'#pragma config FPLLRNG =    RANGE_5_10_MHZ');
-                WriteLn(FMain,'#pragma config FPLLIDIV =   DIV_1');
-                WriteLn(FMain,'#pragma config FPLLMULT =    MUL_50');
-                CalcCpu_div;
-                WriteLn(FMain,'#pragma config FPLLODIV =   DIV_'+IntToStr(CPU_Div));
-                Clock := Round(PIC32MZSetup.Clock/CPU_Div);
-                end;
-            end
-          else
-            if Quartz<8 then WriteMemo('Ошибка. Нельзя использовать генератор меньше 8МГц')
-            else if Quartz>64 then WriteMemo('Ошибка. Нельзя использовать генератор больше 64МГц')
-            else
-              begin
-                WriteMemo('Используем внешний осцилятор частотой '+IntToStr(Quartz)+'МГц.');
-                if not EC then WriteLn(FMain,'#pragma config POSCMOD =    HS              // External OSC ')
-                          else WriteLn(FMain,'#pragma config POSCMOD =    EC              // External Clock ');
-                if Quartz=12 then WriteLn(FMain,'#pragma config UPLLFSEL =   FREQ_12MHZ');
-                if Quartz=24 then WriteLn(FMain,'#pragma config UPLLFSEL =   FREQ_24MHZ');
-                WriteLn(FMain,'#pragma config FPLLICLK =   PLL_POSC');
-                case Quartz of
-                  8..9: WriteLn(FMain,'#pragma config FPLLRNG =    RANGE_5_10_MHZ');
-                  10..14: WriteLn(FMain,'#pragma config FPLLRNG =    RANGE_8_16_MHZ');
-                  15..23: WriteLn(FMain,'#pragma config FPLLRNG =    RANGE_13_26_MHZ');
-                  24..38: WriteLn(FMain,'#pragma config FPLLRNG =    RANGE_21_42_MHZ');
-                  39..64: WriteLn(FMain,'#pragma config FPLLRNG =    RANGE_34_64_MHZ');
-                end;
-                for Indiv := 1 to 8 do if (Quartz/Indiv)<=16 then break;
-                WriteLn(FMain,'#pragma config FPLLIDIV =   DIV_'+IntToStr(Indiv));
-                i := Round(400*Indiv/Quartz);
-                WriteLn(FMain,'#pragma config FPLLMULT =    MUL_'+IntToStr(i));
-                CalcCpu_div;
-                WriteLn(FMain,'#pragma config FPLLODIV =   DIV_'+IntToStr(CPU_Div));
-                Clock:=Round(i*Quartz/(CPU_Div*Indiv));
-                WriteMemo('Итоговая частота '+IntToStr(Clock)+'МГц.');
-              end;
-        end;
     end;
 //Стартовала пользовательская программа.
   if YesCompile then WriteLn(FInit,'}');
@@ -285,22 +201,10 @@ end;
 
 procedure SetTimer(N:Byte;Delayus:Int64;Interrupt:TInterrupt);
 var FCycles : Double;
-MaxTimer,NCrit,MaxPrescale,MaxPrescaleCrit:LongWord;
-Step,StepCrit :Word;
-Divider :Word;
-
-Procedure SetConfig(C1,C2,C3,C4,C5,C6:LongWord);
-begin
-   MaxTimer        := C1;
-   NCrit           := C2;
-   MaxPrescale     := C3;
-   MaxPrescaleCrit := C4;
-   Step            := C5;
-   StepCrit        := C6;
-end;
-
 begin
   if FlagAnalisis then exit;
+
+
   if N>High(Timers) then WriteMemo('Таймера '+IntToStr(N)+' не существует для данного типа контроллеров')
   else
     begin
@@ -308,34 +212,32 @@ begin
       Timers[N].Delay := Delayus;
       Timers[N].Counter := Delayus;
       case Cpu of
-        PIC18F4520: Divider := 4;  //Точно ли для MZ так же?
-        PIC32MZ64..PIC32MZ144:  Divider:=  2;
-      end;
-      FCycles := (Clock*Delayus)/Divider;
-      Timers[N].Prescalecode := 0;
-      Timers[N].Prescale := 1;
-      case Cpu of
-        PIC18F4520: SetConfig(255,2,16,8,2,4);
-        PIC32MZ64..PIC32MZ144: SetConfig(65535,0,64,256,2,8);
-      end;
-      if N<>NCrit  then
-        while (FCycles>MaxTimer) and (Timers[N].Prescale<MaxPrescale) do
+        PIC18F4520:
           begin
-            Timers[N].Prescale := Timers[N].Prescale*Step ;
-            inc(Timers[N].Prescalecode);
-            FCycles := FCycles/Step;
-          end
-      else
-        while (FCycles>MaxTimer) and (Timers[N].Prescale<MaxPrescaleCrit) do
-          begin
-            Timers[N].Prescale := Timers[N].Prescale*StepCrit;
-            inc(Timers[N].Prescalecode);
-            FCycles := FCycles/StepCrit;
+            FCycles := (Clock*Delayus)/4;
+            Timers[N].Prescalecode := 0;
+            Timers[N].Prescale := 1;
+            //else
+              if N<>2 then
+                while (FCycles>255) and (Timers[N].Prescale<8) do
+                  begin
+                     Timers[N].Prescale := Timers[N].Prescale*2;
+                     inc(Timers[N].Prescalecode);
+                     FCycles := FCycles/2;
+                  end
+              else
+                while (FCycles>255) and (Timers[N].Prescale<16) do
+                   begin
+                     Timers[N].Prescale := Timers[N].Prescale*4;
+                     inc(Timers[N].Prescalecode);
+                     FCycles := FCycles/4;
+                   end;
+            Timers[N].ProgramScale := Trunc(FCycles/256); //Сколько цикло по 255
+            Timers[N].Tail := Round(FCycles) - Timers[N].ProgramScale*256; //Последний цикл обрезанный.
+            WriteMemo('Установлено срабатывание таймера №'+IntToStr(N)+' по истечению '+FloatToStr((Round(FCycles)*Timers[N].Prescale*4)/Clock)+' мкс');
+            //Prescale 1..8
           end;
-      Timers[N].ProgramScale := Trunc(FCycles/(MaxTimer+1)); //Сколько цикло по 255
-      Timers[N].Tail := Round(FCycles) - Timers[N].ProgramScale*(MaxTimer+1); //Последний цикл обрезанный.
-      if Clock>0 then WriteMemo('Установлено срабатывание таймера №'+IntToStr(N)+' по истечению '+FloatToStr((Round(FCycles)*Timers[N].Prescale*Divider)/Clock)+' мкс')
-      else  WriteMemo('Ошибка инициализации таймера: частота контроллера почему-то установлена 0');
+      end;
     end;
 end;
 
@@ -348,7 +250,7 @@ Function Division(DivC:Integer):LongWord; //inline;
   end;
 
 begin
-  //if FlagAnalisis then exit;
+  if FlagAnalisis then exit;
   if N>High(UARTS) then WriteMemo('Порта '+IntToStr(N)+' не существует для данного типа контроллеров')
   else
     begin
@@ -368,18 +270,17 @@ begin
             WriteMemo('SPBRH= '+InttoStr(SPBRH));
             WriteMemo('Установлена скорость '+IntToStr(Division(SPBRG+SPBRH*256+1)));
           end;
-       PIC32MZ64..PIC32MZ144:
-         begin
-           Scale := 8;
-           SPBRG := Division(BaudRate)-1;
-           WriteMemo('UxBRG = '+InttoStr(SPBRG));
-           WriteMemo('Установлена скорость '+IntToStr(Division(SPBRG+1)));
-         end;
       end;
 
     end;
 end;
 
+{
+function BitToByte(B:Byte):Byte;
+begin
+  result shl(
+end;
+}
 
 procedure SetAsIn(Port:Byte);
 var c:Char; i:Integer;
@@ -403,22 +304,17 @@ begin
 end;
 
 Function TimerReset(i:Integer;ForceTail:Boolean):String;
-var j,k:Integer;
+var j:Integer;
 begin
-       case CPU of
-         PIC18F4520 : k:=i;
-         PIC32MZ64..PIC32MZ144    : k:=i+1;
-       end;
-
        if (Timers[i].ProgramScale>0) and (not ForceTail) then
-           if ((i mod 2)=0) or (Cpu<>PIC18F4520) then Result := 'TMR'+IntToStr(k)+' = 0;'
-                                                 else Result := 'TMR'+IntToStr(k)+' = 0xff00;'
+           if (i mod 2)=0 then Result := 'TMR'+IntToStr(i)+' = 0;'
+                          else Result := 'TMR'+IntToStr(i)+' = 0xff00;'
         else
           begin
-           if ((i mod 2)=0) and (Cpu=PIC18F4520)    then j:=256-Timers[i].Tail
-                                                    else j:=65536-Timers[i].Tail; //Было 66526
-           //if ForceTail then Result := 'TMR'+IntToStr(k)+' = Timer'+IntToStr(i)+'_tail'+';'
-                        {else} Result := 'TMR'+IntToStr(k)+' = '+IntToStr(j)+';';
+           if (i mod 2)=0 then j:=256-Timers[i].Tail
+                          else j:=66526-Timers[i].Tail;
+           if ForceTail then  Result := 'TMR'+IntToStr(i)+' = Timer'+IntToStr(i)+'_tail'+';'
+                        else Result := 'TMR'+IntToStr(i)+' = '+IntToStr(j)+';';
           end;
 end;
 
@@ -426,7 +322,10 @@ procedure CompileInitTimers;
 var S:String;
 i,j:Integer;
 begin
-  Assign(FSketch,PathSketch+CPU_Name[CPU]+TimersTail);
+   case Cpu of
+      PIC18F4520:
+           Assign(FSketch,'../../Sketch/PIC18F4520_timers.txt');
+   end;
   Reset(FSketch);
   while (not Eof(FSketch)) do
     begin
@@ -434,21 +333,8 @@ begin
       WriteLn(FInit,S);
     end;
   CloseFile(FSketch);
-  //Заполнение init
-  {for I := 0 to 8 do
-    begin
-       WriteLn(FInit,'//Init Timer',i+1);
-       WriteLn(FInit,'T',i+1,'CONbits.ON = 0;');
-       WriteLn(FInit,'IPC',i+1,'bits.T',i+1,'IF = 0;');
-       WriteLn(FInit,'IFS0bits.T',i+1,'IF = 0;');
-       WriteLn(FInit,'IEC0bits.T',i+1,'IE = 0;');
-       WriteLn(FInit,'');
-    end; }
-
   For i := 0 to High(Timers) do
     if Timers[i].Delay>0 then
-    case CPU of
-    PIC18F4520:
       begin
         if i=0 then WriteLn(FInit,'T',i,'CONbits.T',i,'PS = ',Timers[i].PrescaleCode,';')
                else WriteLn(FInit,'T',i,'CONbits.T',i,'CKPS = ',Timers[i].PrescaleCode, ';');
@@ -456,15 +342,6 @@ begin
         WriteLn(FInit,'T',i,'CONbits.TMR',i,'ON = 1;');
         WriteLn(FInit,'');
       end;
-    PIC32MZ64..PIC32MZ144:
-      begin
-        if (i mod 2 = 1) then  WriteLn(FInit,'T',i+1,'CONbits.T32 = 0;');
-        WriteLn(FInit,'T',i+1,'CONbits.TCKPS =',Timers[i].PrescaleCode,';');
-        WriteLn(FInit,'T',i+1,'CONbits.ON = 1;');
-        WriteLn(FInit,'');
-      end;
-    end;
-
   WriteLn(FInit,'}');
   //WriteLn(FInit,'void InitUART(void)');
   // WriteLn(FInit,'');
@@ -479,11 +356,10 @@ S:String;
 i,j:Integer;
 begin
    WriteLn(FInit,'#define Clock ',Clock*1000*1000);
-   Assign(FSketch,PathSketch+CPU_Name[CPU]+UARTTail);
-   //case Cpu of
-     // PIC18F4520:
-    //       Assign(FSketch,'../../../Sketch/pic18f4520_uart.txt');
-  // end;
+   case Cpu of
+      PIC18F4520:
+           Assign(FSketch,'../../Sketch/pic18f4520_uart.txt');
+   end;
   Reset(FSketch);
   while (not Eof(FSketch)) do
     begin
@@ -494,55 +370,19 @@ begin
   Flush(FInit);
 end;
 
-procedure CompileOtherProc(Head:Boolean);
-var
+
+procedure SetBit;
+var C:Char;
 i:Integer;
-j:TTokenKind;
-B:Boolean;
-S:String;
-SPTok : String;
 begin
-    for I := 0 to High(Code) do
-      if FindOperator(Code[i],PROCEDURETOK)>-1 then
-        begin
-          B:=True;
-          for j:=STARTTOK to ONRXCHARTOK do
-            if FindOperator(Code[i],j)>-1 then  B:=False;
-          if B then
-            begin
-              S := ReplacePasToC(Code[i],PROCEDURETOK);
-              S := Replace(S,SEMICOLONTOK,'(void)');
-              if FindOperator(Code[i+1],BEGINTOK)=-1 then
-                if Head then
-                begin
-                  S := S+';';
-                  AddTText(MainCode,S);
-                  SPTok:= Replace(Code[i],PROCEDURETOK,'');
-                  SPTok:= Replace(SPTok,SEMICOLONTOK,'');
-                  SPTok:= DeleteSpaceBars(SPTok,0);
-                  AddTText(ProcTokens,SpTok);
-                end
-                else
-              else
-                if not Head then
-
-                begin
-                  AddTText(MainCode,S);
-                  AddTText(MainCode,'{');
-                  CompileText(MainCode,'',i);
-                  AddTText(MainCode,'}');
-                end;
-            end;
-        end;
+   C := 'A';
+   For i:=0 to (Port div 10)-1 do inc(C);
+   WriteMemo('Порт R'+C+Chr($30+Port mod 10)+' успешно установлен на '+IntTOStr(Bit));
 end;
-
-
-
 
 procedure PrepareToMain;
 var i:Integer;
 begin
-  SetLength(ProcTokens,0);
   for i:=0 to High(Timers) do
     if Timers[i].Delay>0 then
        begin
@@ -556,11 +396,7 @@ begin
         AddTText(MainCode,'unsigned char RX_'+IntToStr(i)+';');
       end;
   AddTText(MainCode,'int main(int argc, char** argv);');
-  case CPU of
-     PIC18F4520: AddTText(MainCode,'void __interrupt() high_isr(void);');
-     PIC32MZ64..PIC32MZ144 : AddTText(MainCode,'void __ISR(0, ipl1) InterruptHandler(void);');
-  end;
-  CompileOtherProc(True);
+  AddTText(MainCode,'void __interrupt() high_isr(void);');
   AddTText(MainCode,'int main(int argc, char** argv)');
   AddTText(MainCode,'{');
   AddTText(MainCode,'  Init();');
@@ -568,10 +404,7 @@ end;
 
 procedure PrepareToHigh_isr;
 begin
-   case CPU of
-     PIC18F4520: AddTText(MainCode,'void __interrupt() high_isr(void)');
-     PIC32MZ64..PIC32MZ144 : AddTText(MainCode,'void __ISR(0, ipl1) InterruptHandler(void)');
-  end;
+  AddTText(MainCode,'void __interrupt() high_isr(void)');
   AddTText(MainCode,'{');
 end;
 
@@ -585,8 +418,6 @@ end;
 
 procedure RunTimer(i:Integer);
 begin
-  case CPU of
-  PIC18F4520:
   case i of
     0:
       begin
@@ -609,18 +440,6 @@ begin
       AddTText(MainCode,'PIR2bits.TMR3IF = 0;');
       end;
     end;
-  PIC32MZ64..PIC32MZ144:
-    if i<6 then
-      begin
-        AddTText(MainCode,'if ((IFS0bits.T'+IntToStr(i+1)+'IF) && (IEC0bits.T'+IntToStr(i+1)+'IE)) {');
-        AddTText(MainCode,'IFS0bits.T'+IntToStr(i+1)+'IF = 0;');
-      end
-    else
-      begin
-        AddTText(MainCode,'if ((IFS1bits.T'+IntToStr(i+1)+'IF) && (IEC1bits.T'+IntToStr(i+1)+'IE)) {');
-        AddTText(MainCode,'IFS1bits.T'+IntToStr(i+1)+'IF = 0;');
-      end;
-  end;
     AddTText(MainCode,'Timer'+IntToStr(i)+'_counter++;');
     AddTText(MainCode,'if (Timer'+IntToStr(i)+'_counter <= Timer'+IntToStr(i)+'_maxcount)');
     AddTText(MainCode,'  if (Timer'+IntToStr(i)+'_counter == Timer'+IntToStr(i)+'_maxcount) '+TimerReset(i,True));
@@ -633,8 +452,6 @@ begin
 end;
 
 procedure RunUART(i:Integer);
-var
-S,S2:String;
 begin
   case Cpu of
     PIC18F4520:
@@ -648,24 +465,6 @@ begin
         AddTText(MainCode,'{');
         AddTText(MainCode,'RX_'+IntToStr(i)+' = RCREG;');
         //Обработка ошибкb
-        AddTText(MainCode,'//User code');
-      end;
-    PIC32MZ64..PIC32MZ144:
-      begin
-        S:='U'+IntToStr(i+1);
-        AddTText(MainCode,'if (('+S+'STAbits.OERR)||('+S+'STAbits.FERR)) {');
-        AddTText(MainCode,'  '+S+'STAbits.URXEN = 0;');
-        AddTText(MainCode,'  '+S+'STAbits.URXEN = 1;');
-        AddTText(MainCode,'}');
-        case i of
-          0:    S2:= 'IFS3bits.';
-          1,2:  S2:= 'IFS4bits.';
-          3..5: S2:= 'IFS5bits.';
-        end;
-        AddTText(MainCode,'if ('+S2+S+'RXIF)'+' while ('+S+'STAbits.URXDA)');
-        AddTText(MainCode,'{');
-        AddTText(MainCode,'RX_'+IntToStr(i)+' = '+S+'RXREG;');
-        //Обработка ошибок
         AddTText(MainCode,'//User code');
       end;
   end;
@@ -686,7 +485,6 @@ end;
 
 procedure FirstRun;
 var i:Integer;
-
 begin
   if YesCompile then
     begin
@@ -697,25 +495,18 @@ begin
   RunF := True;
   if YesCompile then
   begin
-   // FileToText('../../operators.txt',Operators);
-    //AddTText(Operators,' ');
-    PasToken.Load(PathOperators+'API/Operators/');
-    CToken.Load(PathOperators+'API/COperators/');
+    FileToText('../../operators.txt',Operators);
+    AddTText(Operators,' ');
     FileToText('../../usercode.pas',Code);
     SetLength(MainCode,0);
-    SetLength(Errors,0);
     CompileConst(MainCode);
     CompileVar(MainCode);
     PrepareToMain;
-    //-------Compile Standart procedures
     CompileText(MainCode,'Start');
-    AddTText(MainCode,'  while (1){');   //Суперцикл.
-    CompileText(MainCode,'MainLoop');
-    AddTText(MainCode,'}');
+    AddTText(MainCode,'  while (1) {}');   //Суперцикл.
     AddTText(MainCode,'  return (EXIT_SUCCESS);');
     AddTText(MainCode,'}');
     PrepareToHigh_isr;
-      //Timers
     for i:=0 to High(Timers) do
       if Timers[i].Delay>0 then
         begin
@@ -724,7 +515,7 @@ begin
           AddTText(MainCode,'}');
           AddTText(MainCode,'}');
         end;
-      //UART
+    //UART
     for i:=0 to High(Uarts) do
       if Uarts[i].BaudRate>0 then
         begin
@@ -733,11 +524,6 @@ begin
           AddTText(MainCode,'}');
         end;
     AddTText(MainCode,'}');
-     //--------Сompile other procedures
-    CompileOtherProc(False);
-
-
-    For i:=0 to High(Errors) do Form1.Memo1.Lines.Add(Errors[i]);//Writeln(FMain,MainCode[i]);
     For i:=0 to High(MainCode) do Writeln(FMain,MainCode[i]);
     Flush(FMain);
   end;
@@ -802,119 +588,11 @@ begin
  if not RunF then FirstRun;
 end;
 
-procedure SetCPU(In_CPU:word);
-begin
-  if In_CPU>High_CPU then  Cpu := 0
-  else Cpu := In_CPU;
-end;
-
-
-//------------Inline proc   +APIPROC
-procedure SetOneBit(var Prt:LongWord;Nbit:Byte; YesSet:Boolean);
-begin
-  Prt := Prt or Round(Power(2,NBit));
-  if not YesSet then Prt := Prt xor Round(Power(2,NBit));
-end;
-
-function GetOneBit(Prt:LongWord;Nbit:Byte):Byte;
-begin
-  Prt := Prt shr Nbit;
-  result := Prt mod 2;
-end;
-
-
-procedure SetBit;  //Передалать на 32  бита
-var C:Char;
-i,NPort:Integer;
-
-begin
-   C := 'A';
-   Nport := Port div 10;
-   For i:=0 to Nport-1 do inc(C);
-   //Если всё нормально по TRIS
-   SetOneBit(Ports[Nport]^,Port mod 10,Bit>0);
-   if ReportRWPort then WriteMemo('Порт R'+C+Chr($30+Port mod 10)+' успешно установлен на '+IntTOStr(Bit));
-   if @OnPort<>nil then OnPort;
-end;
-
-procedure GetBit;
-var C:Char;
-i,NPort,NPin:Integer;
-begin
-   C := 'A';
-   NPort := Port div 10;
-   Npin := Port mod 10;
-   For i:=0 to (NPort)-1 do inc(C);
-   Bit:=GetOneBit(TRIS[NPort],Npin);
-   if (InvertTrisa xor (Bit>0)) then
-     begin
-       Bit:=GetOneBit(Ports[NPort]^,Npin);
-       if ReportRWPort then WriteMemo('Порт R'+C+Chr($30+Port mod 10)+' находиться в состоянии '+IntTOStr(Bit));
-     end;
-end;
-
-procedure FastTx(USART:Byte;Data:AnsiChar);
-var
-A:Array of Byte;
-begin
-  UARTS[USART].TXReg := Byte(Data);
-  SetLength(A,1);
-  A[0] := UARTS[USART].TXReg;
-  if @UARTS[USART].OnPCRxChar<>nil then UARTS[USART].OnPCRxChar(A,1);
-end;
-
-procedure FastTx(USART:Byte;Data:Byte);
-var
-A:Array of Byte;
-begin
-  UARTS[USART].TXReg := Data;
-  SetLength(A,1);
-  A[0] := UARTS[USART].TXReg;
-  if @UARTS[USART].OnPCRxChar<>nil then UARTS[USART].OnPCRxChar(A,1);
-end;
-
-procedure FastRx(USART:Byte;var Data:Byte);
-begin
-  Data := UARTS[USART].RxReg;
-end;
-
-procedure TransferStr(S:AnsiString);
-var
-A:Array of Byte;
-i,n:Integer;
-begin
-  n := Length(S);
-  SetLength(A,n);
-  for I := 0 to n-1 do  A[i]:=Byte(S[i+1]);
-  if @UARTS[MainPort].OnPCRxChar<>nil then UARTS[MainPort].OnPCRxChar(A,n);
-end;
-
-Procedure ChangePort;
-begin
-  MainPort := N;
-end;
-
-procedure InitUART(Port:Byte;BaudRate:Integer);
-begin
-  SetUart(Port,BaudRate,UARTS[Port].OnRxChar,UARTS[Port].OnPCRxChar);
-end;
-
-procedure Nop;
-var a:byte;
-begin
-  a:=0;
-end;
-
-
-
 begin
   SetLength(UARTs,PICControllers.Uarts);
   SetLength(Timers,PICControllers.Timers);
-  Ports[0] := @PortA;
-  Ports[1] := @PortB;
-  Ports[2] := @PortC;
-  Ports[3] := @PortD;
-  Ports[4] := @PortE;
-  Ports[5] := @PortF;
+
+
+
 end.
 

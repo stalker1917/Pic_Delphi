@@ -13,4 +13,6 @@ string
 Ansistring
 real
 extended
+longint
+record
 array

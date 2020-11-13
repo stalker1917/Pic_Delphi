@@ -6,7 +6,7 @@ const
 /
 do
 downto
-else
+default:
 }
 file
 for

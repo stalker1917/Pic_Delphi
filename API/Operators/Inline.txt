@@ -1,5 +1,7 @@
 SetBit
+GetBit
 FastTx
 FastRx
+Nop
 inc
 dec

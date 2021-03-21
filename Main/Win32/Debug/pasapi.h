@@ -1,3 +1,0 @@
-void TransferStr(char* Str);
-void ChangePort(char P);
- 

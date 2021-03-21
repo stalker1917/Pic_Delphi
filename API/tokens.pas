@@ -87,6 +87,7 @@ TTokenKind =
     PROGRAMTOK,
     RECORDTOK,
     REPEATTOK,
+    RESULTTOK,
     SETTOK,
     SHLTOK,
     SHRTOK,

@@ -6,9 +6,11 @@
 
 #include <xc.h>
 #include <sys/attribs.h>
-#include <p32xxxx.h>      
+#include <p32xxxx.h>  
+#include <stdbool.h>       
 #include "init.h"
 #include "pasapi.h"
+#pragma pack(push,1)
 #define _PROTOCOL_24D_
 //---------------------------------------------------------------------
 // Configuration bits

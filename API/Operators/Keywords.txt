@@ -27,6 +27,7 @@ procedure
 program
 record
 repeat
+result
 set
 shl
 shr

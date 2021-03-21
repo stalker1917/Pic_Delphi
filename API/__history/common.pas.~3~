@@ -1,0 +1,55 @@
+unit Common;
+
+interface
+const
+    PIC18F4520 = 0;
+type
+TText   = Array of String;
+TArrHack<T> = class
+    class procedure Append(var Arr: TArray<T>; Value: T);
+    class function GetHigh(var Arr: TArray<T>):T;
+    class function DeleteHigh(var Arr: TArray<T>);
+  end;
+
+var
+Cpu         : Integer;
+
+
+
+Procedure FileToText(S:String;var Dump:TText);
+implementation
+
+Procedure FileToText(S:String;var Dump:TText);
+var //s1:Ansistring;
+s1:String;
+f:Text;
+begin
+  Assignfile(f,s); //Список операторов
+  Reset(f);
+  SetLength(Dump,0);
+  while not eof(f) do
+    begin
+      readln(f,s1);
+      SetLength(Dump,Length(Dump)+1);
+      Dump[Length(Dump)-1] := s1;
+    end;
+ closeFile(f);
+end;
+
+class procedure TArrHack<T>.Append;
+begin
+  SetLength(Arr, Length(Arr)+1);
+  Arr[High(Arr)] := Value;
+end;
+
+class procedure TArrHack<T>.GetHigh;
+begin
+  result := Arr[High(Arr)];
+end;
+
+class procedure TArrHack<T>.DeleteHigh;
+begin
+  SetLength(Arr,Length(Arr)-1);
+end;
+
+end.

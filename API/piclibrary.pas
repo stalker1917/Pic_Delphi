@@ -65,6 +65,7 @@ const
   TimersTail='_timers.txt';
   UartTail='_uart.txt';
   ApiTail='_api.txt';
+  ApihTail='_apih.txt';
 var
   Form1: TForm1;
   Quartz      : Integer; //Mhz
@@ -79,16 +80,21 @@ var
   RunF        : Boolean = False; //Сработала ли инициализация таймеров;
   TRIS        : Array [0..6] of Byte = (0,0,0,0,0,0,0);
   MainCode    : TText;
+  VarProcCode : TText; //Переменные внутри функции.
+  VarProcCode2: TText; //Переменные внутри функции после трансляции
   UARTs       :  Array of TUART;
   Timers      :  Array of TTimer;
   InitProc    :  procedure;
   PICControllers : TPICCOntroller = (Clock : 40; Timers:4; Uarts:1);
   PIC32MZSetup   : TPICCOntroller = (Clock : 200; Timers:9; Uarts:6);
+  CurrController : TPICCOntroller;
   YesRun      : Boolean=False;
   Ports       :  Array[0..6] of ^LongWord;
   PortA,PortB,PortC,PortD,PortE,PortF:LongWord; // Для работы с 32bit;
   OnPort      : TInterrupt = nil;
+  MLoop       : TInterrupt = nil;
   MainPort    : Byte = 0;
+
 procedure PrepareToMain;
 procedure Run; //Применить установленную конфигурацию.
 procedure InitCPU; //Инициализация CPU
@@ -137,8 +143,13 @@ j := 1;
     end;
 CPU_Div := j*2;
 end;
-
   begin
+   case Cpu of
+      PIC18F4520:             CurrController := PICControllers;
+      PIC32MZ64..PIC32MZ144:  CurrController := PIC32MZSetup;
+   end;
+  SetLength(UARTs,CurrController.Uarts);
+  SetLength(Timers,CurrController.Timers);
     if initCPUF then
       begin
         WriteMemo('Ошибка: нельзя вызывать функцию InitCPU два раза!');
@@ -173,6 +184,7 @@ end;
             end;
           Close(FSketch);
           CopyFile(PWideChar(PathSketch+CPU_Name[CPU]+APITail),'pasapi.c',false);
+          CopyFile(PWideChar(PathSketch+CPU_Name[CPU]+APIHTail),'pasapi.h',false);
         end;
    case Cpu of
       PIC18F4520:
@@ -496,39 +508,72 @@ end;
 
 procedure CompileOtherProc(Head:Boolean);
 var
-i:Integer;
+i,k:Integer;
 j:TTokenKind;
-B:Boolean;
+Flag:Boolean;
 S:String;
 SPTok : String;
+A,B : Integer; //C
+//Func : Boolena
 begin
     for I := 0 to High(Code) do
-      if FindOperator(Code[i],PROCEDURETOK)>-1 then
+      // Func := FindOperator(Code[i],FUNCTIONTOK)>-1
+      if FindOperator(Code[i],PROCEDURETOK)>-1 then  //or  Func
         begin
-          B:=True;
+          Flag:=True;
           for j:=STARTTOK to ONRXCHARTOK do
-            if FindOperator(Code[i],j)>-1 then  B:=False;
-          if B then
+            if FindOperator(Code[i],j)>-1 then  Flag:=False;
+          if Flag then
             begin
               S := ReplacePasToC(Code[i],PROCEDURETOK);
-              S := Replace(S,SEMICOLONTOK,'(void)');
-              if FindOperator(Code[i+1],BEGINTOK)=-1 then
+              a := FindOperator(Code[i],OPARTOK);
+              if a=-1 then S := Replace(S,SEMICOLONTOK,'(void)')
+                //Ищём :  на C
+              else
+                begin
+                  b:=FindOperator(Code[i],CPARTOK);
+                  if b=-1 then AddTText(Errors,'Ошибка! Есть открывающая скобка , но нет закрывающей')
+                  else
+                    begin
+                      //ищем с после b
+                      S := Copy(S,1,FindOperator(S,OPARTOK));
+                      StringToText(VarProcCode,Copy(Code[i],a+1,b-a-1));
+                      CompileVarType(VarProcCode,VarProcCode2,False,0);
+                      ReplaceSemicolon(VarProcCode2);
+                      S := S + TextToStr(VarProcCode2) + ')';
+                    end;
+                end;
+              //всё что после с - это тип.
+              if FindStrWithOperator(Code,IMPLEMENTATIONTOK,i+1)>-1 then  //Если не begin значит в теле
                 if Head then
                 begin
+                  AddTText(FullProcTokens,S);
                   S := S+';';
-                  AddTText(MainCode,S);
+                  AddTText(MainCode,S);  //Записывать название функций и процедур
                   SPTok:= Replace(Code[i],PROCEDURETOK,'');
                   SPTok:= Replace(SPTok,SEMICOLONTOK,'');
+                  a := FindOperator(SPTok,OPARTOK);
+                  if a>-1 then SPTok:= copy(SPTok,1,a-1);
                   SPTok:= DeleteSpaceBars(SPTok,0);
                   AddTText(ProcTokens,SpTok);
                 end
                 else
               else
-                if not Head then
-
+                if not Head then  //Переменные инициализируем в теле!
                 begin
-                  AddTText(MainCode,S);
+                  //AddTText(MainCode,S);
+                  for k := 0 to High(ProcTokens) do
+                    begin
+                      a := FindString(S,ProcTokens[k],1);
+                      if a>-1 then
+                        begin
+                          AddTText(MainCode,FullProcTokens[k]);
+                          break;
+                        end;
+                    end;
                   AddTText(MainCode,'{');
+                  CompileConst(MainCode,i+1);
+                  CompileVarType(Code,MainCode,False,i+1);
                   CompileText(MainCode,'',i);
                   AddTText(MainCode,'}');
                 end;
@@ -543,6 +588,7 @@ procedure PrepareToMain;
 var i:Integer;
 begin
   SetLength(ProcTokens,0);
+  SetLength(FullProcTokens,0);
   for i:=0 to High(Timers) do
     if Timers[i].Delay>0 then
        begin
@@ -671,6 +717,25 @@ begin
   end;
 end;
 
+procedure EndUART(i:Integer);
+var
+S,S2:String;
+begin
+  AddTText(MainCode,'}');
+  case Cpu of
+    PIC32MZ64..PIC32MZ144:
+      begin
+        S:='U'+IntToStr(i+1);
+        case i of
+          0:    S2:= 'IFS3bits.';
+          1,2:  S2:= 'IFS4bits.';
+          3..5: S2:= 'IFS5bits.';
+        end;
+        AddTText(MainCode,S2+S+'RXIF = 0;'); //Сброс флага.
+      end;
+  end;
+end;
+
 procedure CompileInitGlobal;
 var i:Integer;
 begin
@@ -679,7 +744,8 @@ WriteLn(FInit,'void Init(void)');
 WriteLn(FInit,'{');
 WriteLn(FInit,'  InitCPU();');
 WriteLn(FInit,'  InitTimers();');
-for i:=0 to High(UARTs) do WriteLn(FInit,'  InitUART(',i,',',Uarts[i].BaudRate,');');
+for i:=0 to High(UARTs) do
+ if Uarts[i].BaudRate>0 then WriteLn(FInit,'  InitUART(',i,',',Uarts[i].BaudRate,');');
 WriteLn(FInit,'}');
 Flush(FInit);
 end;
@@ -705,7 +771,9 @@ begin
     SetLength(MainCode,0);
     SetLength(Errors,0);
     CompileConst(MainCode);
-    CompileVar(MainCode);
+    //CompileType(MainCode);
+    CompileVarType(Code,MainCode,True);
+    CompileVarType(Code,MainCode);
     PrepareToMain;
     //-------Compile Standart procedures
     CompileText(MainCode,'Start');
@@ -730,7 +798,11 @@ begin
         begin
           RunUART(i);
           CompileText(MainCode,'OnRxChar'+InttoStr(i));
-          AddTText(MainCode,'}');
+          EndUART(i);
+          //AddTText(MainCode,'}');
+          //case Cpu of  для do..whilw
+          //PIC32MZ64..PIC32MZ144: AddTText(MainCode,' while ('+'U'+IntToStr(i+1)+'STAbits.URXDA)');
+          //end;
         end;
     AddTText(MainCode,'}');
      //--------Сompile other procedures
@@ -749,6 +821,7 @@ procedure Run;
 var
   i,mini:Integer;
   mincount : Int64;
+  A:Array of Byte;
 begin
   if (not RunF) then FirstRun;
   WriteMemo('Запущена процедура Start');
@@ -773,7 +846,15 @@ begin
       WriteMemo('Прошло '+IntTOStr(mincount)+' мкс.');
       Timers[mini].Counter := Timers[mini].Delay;
       Timers[mini].IntProc;
-
+      if @MLoop<>nil then MLoop;
+      SetLength(A,4);
+      for I := 0 to 3 do
+        begin
+          A[i]:= mincount  mod 256;
+          mincount  := mincount  div 256;
+        end;
+      for I := 0 to High(UARTS) do
+        if @UARTS[i].OnPCRxChar<>nil then UARTS[i].OnPCRxChar(A,-1);
     end;
   //Инициализируем UART
   //Инициализируем Таймер
@@ -908,8 +989,6 @@ end;
 
 
 begin
-  SetLength(UARTs,PICControllers.Uarts);
-  SetLength(Timers,PICControllers.Timers);
   Ports[0] := @PortA;
   Ports[1] := @PortB;
   Ports[2] := @PortC;

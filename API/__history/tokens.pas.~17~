@@ -1,0 +1,181 @@
+﻿// BSD-File
+// Origin -  XD Pascal - a 32-bit compiler for Windows. Common.pas
+// Copyright (c) 2009-2010, 2019-2020, Vasiliy Tereshkov
+// Copyright (c) Andrey Rulin
+
+{$I-}
+{$H-}
+
+unit Tokens;
+
+interface
+uses Common;
+
+//const
+
+type
+
+
+TString = string;
+TField = record
+    Name: TString;
+    DataType: Integer;
+    Offset: Integer;
+  end;
+
+  PField = ^TField;
+
+
+TTokenKind =
+    (
+    EMPTYTOK,
+    
+    // Delimiters
+    OPARTOK,    //(
+    CPARTOK,    //)
+    MULTOK,
+    PLUSTOK,
+    COMMATOK,
+    MINUSTOK,
+    PERIODTOK,
+    RANGETOK,
+    DIVTOK,
+    COLONTOK,
+    ASSIGNTOK,
+    SEMICOLONTOK,
+    LTTOK,
+    LETOK,
+    NETOK,
+    EQTOK,    //=
+    GTTOK,
+    GETOK,
+    ADDRESSTOK,
+    OBRACKETTOK,  //[
+    CBRACKETTOK,  //]
+    COMMENTTOK,
+    QUOTETOK,
+    DOLLARTOK,
+    DEREFERENCETOK,
+
+    // Keywords
+    ANDTOK,
+    ARRAYTOK,
+    BEGINTOK,
+    CASETOK,
+    CONSTTOK,
+    IDIVTOK,
+    DOTOK,
+    DOWNTOTOK,
+    ELSETOK,
+    ENDTOK,
+    FILETOK,
+    FORTOK,
+    FUNCTIONTOK,
+    GOTOTOK,
+    IFTOK,
+    IMPLEMENTATIONTOK,
+    INTOK,
+    INTERFACETOK,
+    LABELTOK,
+    MODTOK,
+    NILTOK,
+    NOTTOK,
+    OFTOK,
+    ORTOK,
+    PACKEDTOK,
+    PROCEDURETOK,
+    PROGRAMTOK,
+    RECORDTOK,
+    REPEATTOK,
+    SETTOK,
+    SHLTOK,
+    SHRTOK,
+    STRINGTOK,
+    THENTOK,
+    TOTOK,
+    TYPETOK,
+    UNITTOK,
+    UNTILTOK,
+    USESTOK,
+    VARTOK,
+    WHILETOK,
+    WITHTOK,
+    XORTOK,
+    //Types
+    EMPTYTYPE,
+    ANYTYPE,
+    INTEGERTYPE,
+    SMALLINTTYPE,
+    SHORTINTTYPE,
+    WORDTYPE,
+    BYTETYPE,
+    CHARTYPE,
+    BOOLEANTYPE,
+    DOUBLETYPE,
+    SINGLETYPE,
+    STRINGTYPE,
+    ANSISTRINGTYPE,
+    REALTYPE,
+    EXTENDEDTYPE,
+    RECTYPE,
+    ARRAYTYPE,
+    //Inline_Functions
+    SETBITTOK,
+    FASTTXTOK,
+    FASTRXTOK,
+    INCTOK,
+    DECTOK,
+    //Usercode_Procedure
+    STARTTOK,
+    MAINLOOPTOK,
+    ONTIMERTOK,
+    ONRXCHARTOK,
+    //USERTokens
+    USERTOK1
+    );
+
+
+
+
+
+TToken = object
+  KeyWords,Delimiters,Types,InlineT,UserCodeT : TText;
+  procedure Load(Path : String);
+  function GetToken(TokKind: TTokenKind): TString;
+end;
+
+TTokens = Array of TTokenKind;
+
+var
+USERSTR1 :String;
+
+
+
+implementation
+//var i:Integer;
+
+procedure TToken.Load;
+begin
+//../../API/
+  FileToText(Path+'KeyWords.txt',KeyWords);
+  FileToText(Path+'Delimiters.txt',Delimiters);
+  FileToText(Path+'Types.txt',Types);
+  FileToText(Path+'Inline.txt',InlineT);
+  FileToText(Path+'UserCode.txt',UserCodeT);
+end;
+
+function TToken.GetToken(TokKind: TTokenKind): TString;
+begin
+  case TokKind of
+    EMPTYTOK..DEREFERENCETOK:   Result := Delimiters[Ord(TokKind) - Ord(EMPTYTOK){ + 1}];
+    ANDTOK..XORTOK:             Result := KeyWords[Ord(TokKind) - Ord(ANDTOK){ + 1}];
+    EMPTYTYPE..ARRAYTYPE:       Result := Types[Ord(TokKind) - Ord(EMPTYTYPE)];
+    SETBITTOK..DECTOK:          Result := InlineT[Ord(TokKind) - Ord(SETBITTOK)];
+    STARTTOK..ONRXCHARTOK:      Result := UserCodeT[Ord(TokKind) - Ord(STARTTOK)];
+    USERTOK1:                   Result := USERSTR1;
+  end;
+end;
+
+
+
+end.

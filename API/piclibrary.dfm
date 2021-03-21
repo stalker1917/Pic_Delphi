@@ -1,7 +1,7 @@
 object Form1: TForm1
   Left = 0
   Top = 0
-  Caption = 'Form1'
+  Caption = #1057#1086#1089#1090#1086#1103#1085#1080#1077' '#1082#1086#1084#1087#1080#1083#1103#1094#1080#1080'/'#1101#1084#1091#1083#1103#1094#1080#1080
   ClientHeight = 356
   ClientWidth = 619
   Color = clBtnFace

@@ -6,7 +6,7 @@ shortint
 unsigned short
 unsigned char
 char
-char
+bool
 double
 float
 char

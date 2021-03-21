@@ -7,8 +7,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <htc.h>
+#include <stdbool.h> 
 #include "init.h"
 #include "pasapi.h"
+#pragma pack(push,1)
 //---------------------------------------------------------------------
 // Configuration bits
 //---------------------------------------------------------------------

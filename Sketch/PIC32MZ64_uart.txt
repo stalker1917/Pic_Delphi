@@ -40,6 +40,7 @@ void InitUART(char NPort,long int BaudRate)
    MODEBits->ON = 0; 
    STABits->URXEN = 0;
    STABits->UTXEN = 0;
+   STABits->URXISEL = 0;
    *UxBRG= ((Clock / BaudRate) / 8) - 1; 
    MODEBits->PDSEL = 0;
    MODEBits->STSEL = 0;

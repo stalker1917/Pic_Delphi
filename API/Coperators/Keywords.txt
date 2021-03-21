@@ -17,7 +17,7 @@ implementation
 in
 interface
 label
-/*
+%
 null
 !
 of
@@ -27,6 +27,7 @@ void
 program
 record
 repeat
+return
 set
 <<
 >>

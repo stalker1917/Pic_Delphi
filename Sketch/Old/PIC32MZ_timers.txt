@@ -1,0 +1,59 @@
+
+void InitTimers(void)
+{
+//INTCONbits.GIEH = 1;
+//Init Timer1
+T1CONbits.ON = 0;
+IPC1bits.T1IP = 1;
+IFS0bits.T1IF = 0;
+IEC0bits.T1IE = 1;
+
+//Init Timer2
+T2CONbits.ON = 0;
+IPC2bits.T2IP = 1;
+IFS0bits.T2IF = 0;
+IEC0bits.T2IE = 1;
+
+//Init Timer3
+T3CONbits.ON = 0;
+IPC3bits.T3IP = 1;
+IFS0bits.T3IF = 0;
+IEC0bits.T3IE = 1;
+
+//Init Timer4
+T4CONbits.ON = 0;
+IPC4bits.T4IP = 1;
+IFS0bits.T4IF = 0;
+IEC0bits.T4IE = 1;
+
+//Init Timer5
+T5CONbits.ON = 0;
+//IPC5bits.T5IP = 1;
+IFS0bits.T5IF = 0;
+IEC0bits.T5IE = 1;
+
+//Init Timer6
+T6CONbits.ON = 0;
+//IPC6bits.T6IP = 1;
+IFS0bits.T6IF = 0;
+IEC0bits.T6IE = 1;
+
+//Init Timer7
+T7CONbits.ON = 0;
+//IPC7bits.T7IP = 1;
+IFS1bits.T7IF = 0;
+IEC1bits.T7IE = 1;
+
+//Init Timer8
+T8CONbits.ON = 0;
+//IPC8bits.T8IP = 1;
+IFS1bits.T8IF = 0;
+IEC1bits.T8IE = 1;
+
+//Init Timer9
+T9CONbits.ON = 0;
+//IPC9bits.T9IP = 1;
+IFS1bits.T9IF = 0;
+IEC1bits.T9IE = 1;
+
+//User-mode Init

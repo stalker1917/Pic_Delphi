@@ -1,0 +1,5 @@
+extern unsigned int * TXREG;
+extern __U1STAbits_t * STABits;
+
+void TransferStr(char* Str);
+void ChangePort(char P);

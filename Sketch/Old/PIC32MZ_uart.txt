@@ -1,0 +1,10 @@
+
+void InitUART(char NPort,long int BaudRate)
+{
+    TRISD.RPD1 = 1; //U4RX
+    TRISD.RPD9 = 1; //U2RX
+    TRISD.RPD10 = 1; //U5RX
+    TRISF.RPF4 = 1; //U1RX
+    TRISF.RPF5 = 1; //U3RX
+
+}
